@@ -1,94 +1,116 @@
+#!/usr/bin/env python3
+# StepAEntire.py
 import cv2
 import numpy as np
 
-# Parametri
-models_dir = "./models/"   # directory contenente le immagini modello
-scenes_dir = "./scenes/"   # directory contenente le immagini di scena
+# -------------------------------------------
+# Fase A: Rilevamento singole istanze con SIFT,
+# Omografia e bounding box ruotato (minAreaRect).
+# -------------------------------------------
+
+# Directory dei modelli e delle scene
+models_dir = "./models/"    # immagini modello: 0.jpg, 1.jpg, 11.jpg, ...
+scenes_dir = "./scenes/"    # immagini di scena: e1.png, e2.png, ...
+
+# ID dei modelli e nomi delle scene
 model_ids = [0, 1, 11, 19, 24, 25, 26]
 scene_files = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
 
-# Inizializza SIFT
+# Inizializza SIFT e BFMatcher
 sift = cv2.SIFT_create()
-
-# Pre-calcola keypoint e descrittori per ogni modello
-models_features = {}
-for mid in model_ids:
-    img_model = cv2.imread(models_dir + f"{mid}.jpg")
-    if img_model is None:
-        raise FileNotFoundError(f"Model {mid}.jpg non trovato in {models_dir}")
-    kp_model, des_model = sift.detectAndCompute(img_model, None)
-    h_model, w_model = img_model.shape[:2]
-    models_features[mid] = (kp_model, des_model, h_model, w_model, img_model)
-
-# Matcher brute-force
 bf = cv2.BFMatcher(cv2.NORM_L2)
 
+# Pre-elabora i modelli: carica immagine, keypoint, descrittori, dimensioni
+models = {}
+for mid in model_ids:
+    path = f"{models_dir}{mid}.jpg"
+    img_model = cv2.imread(path)
+    if img_model is None:
+        raise FileNotFoundError(f"Model image not found: {path}")
+    kp_model, des_model = sift.detectAndCompute(img_model, None)
+    h_model, w_model = img_model.shape[:2]
+    models[mid] = {
+        'kp': kp_model,
+        'des': des_model,
+        'size': (w_model, h_model)
+    }
+
+# Processa ciascuna immagine di scena
 for scene_file in scene_files:
-    img_scene = cv2.imread(scenes_dir + scene_file)
+    scene_path = f"{scenes_dir}{scene_file}"
+    img_scene = cv2.imread(scene_path)
     if img_scene is None:
-        raise FileNotFoundError(f"Scene {scene_file} non trovato in {scenes_dir}")
+        raise FileNotFoundError(f"Scene image not found: {scene_path}")
     h_scene, w_scene = img_scene.shape[:2]
+
+    # Estrai keypoint e descrittori SIFT dalla scena
     kp_scene, des_scene = sift.detectAndCompute(img_scene, None)
 
-    detected_products = {}
-    for mid, (kp_model, des_model, h_model, w_model, img_model) in models_features.items():
+    detections = {}
+    # Per ogni modello, matching e omografia
+    for mid, data in models.items():
+        kp_model = data['kp']
+        des_model = data['des']
+        w_model, h_model = data['size']
         if des_model is None or des_scene is None:
             continue
-        # Ratio-test di Lowe
+
+        # 1) Matching SIFT + Lowe ratio test
         matches = bf.knnMatch(des_model, des_scene, k=2)
-        good = [m for m,n in matches if m.distance < 0.75 * n.distance]
-        if len(good) < 4:
+        good = [m for m, n in matches if m.distance < 0.4 * n.distance]
+        if len(good) < 8:
             continue
-        # Estrazione punti
-        src = np.float32([kp_model[m.queryIdx].pt for m in good]).reshape(-1,1,2)
-        dst = np.float32([kp_scene[m.trainIdx].pt for m in good]).reshape(-1,1,2)
-        M, mask = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
-        inliers = int(mask.sum()) if mask is not None else 0
-        # Verifica numero minimo di inlier
-        if M is None or inliers < 10 or inliers / len(good) < 0.3:
+
+        # 2) Stima omografia con RANSAC
+        src_pts = np.float32([kp_model[m.queryIdx].pt for m in good]).reshape(-1,1,2)
+        dst_pts = np.float32([kp_scene[m.trainIdx].pt for m in good]).reshape(-1,1,2)
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        if M is None:
             continue
-        # Calcolo fattore di scala dall'omografia
-        A = M[:2, :2]
-        scale = np.sqrt(abs(np.linalg.det(A)))
-        # Applica omografia ai corner del modello
+        inliers = int(mask.sum())
+        if inliers < 4:
+            continue
+
+        # 3) Trasforma corner del modello
         corners = np.float32([[0,0],[w_model,0],[w_model,h_model],[0,h_model]]).reshape(-1,1,2)
         dst_c = cv2.perspectiveTransform(corners, M)
-        xs = dst_c[:,0,0]; ys = dst_c[:,0,1]
-        # Coordinate non filtrate
-        x_min = xs.min(); x_max = xs.max()
-        y_min = ys.min(); y_max = ys.max()
-        # Clamping ai bordi dell'immagine
-        x_min_c = max(0, min(w_scene-1, int(round(x_min))))
-        y_min_c = max(0, min(h_scene-1, int(round(y_min))))
-        x_max_c = max(0, min(w_scene-1, int(round(x_max))))
-        y_max_c = max(0, min(h_scene-1, int(round(y_max))))
-        w = x_max_c - x_min_c
-        h = y_max_c - y_min_c
-        # Filtra in base all'area prevista dalla scala
-        area_model = w_model * h_model
-        area_box = w * h
-        expected_area = (scale**2) * area_model
-        if not (0.5 * expected_area <= area_box <= 2.0 * expected_area):
+        pts = dst_c.reshape(-1,2).astype(np.float32)
+
+        # 4) Calcola bbox ruotato via minAreaRect
+        rot_rect = cv2.minAreaRect(pts)
+        (cx, cy), (w_box, h_box), angle = rot_rect
+        box_pts = cv2.boxPoints(rot_rect).astype(int)
+
+        # 5) Filtro area minima (almeno 1% area scena)
+        if w_box * h_box < 0.01 * (w_scene * h_scene):
             continue
-        # Calcola centro
-        cx = x_min_c + w // 2
-        cy = y_min_c + h // 2
 
-        detected_products.setdefault(mid, []).append((x_min_c, y_min_c, w, h, cx, cy))
+        # Salva detection
+        detections.setdefault(mid, []).append({
+            'center': (int(round(cx)), int(round(cy))),
+            'width': int(round(w_box)),
+            'height': int(round(h_box)),
+            'angle': angle,
+            'box_pts': box_pts
+        })
 
-    # Stampa i risultati
-    print(f"Risultati per {scene_file}:")
-    if not detected_products:
+    # Stampa risultati
+    print(f"\nRisultati per {scene_file}:")
+    if not detections:
         print("  Nessun prodotto riconosciuto.")
-    for pid, inst_list in detected_products.items():
-        print(f"  Product {pid} - {len(inst_list)} instance(s) found:")
-        for i, (x,y,w,h,cx,cy) in enumerate(inst_list,1):
-            print(f"    Instance {i} {{position: ({cx},{cy}), width: {w}px, height: {h}px}}")
-            # Disegna bounding box
-            cv2.rectangle(img_scene, (x,y), (x+w,y+h), (0,255,0), 2)
-            cv2.putText(img_scene, f"{pid}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+    for pid, dets in detections.items():
+        print(f"  Product {pid} - {len(dets)} instance(s) found:")
+        for idx, det in enumerate(dets, 1):
+            cx, cy = det['center']
+            w_box, h_box = det['width'], det['height']
+            print(f"    Instance {idx} {{position: ({cx},{cy}), width: {w_box}px, height: {h_box}px}}")
 
-    # Visualizza
+    # Disegna e visualizza
+    for dets in detections.values():
+        for det in dets:
+            cv2.drawContours(img_scene, [det['box_pts']], 0, (0,255,0), 2)
+            cv2.circle(img_scene, det['center'], 4, (0,0,255), -1)
+
     cv2.imshow(f"Detections - {scene_file}", img_scene)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
