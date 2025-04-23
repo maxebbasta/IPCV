@@ -57,18 +57,18 @@ for scene_file in scene_files:
 
         # 1) Matching SIFT + Lowe ratio test
         matches = bf.knnMatch(des_model, des_scene, k=2)
-        good = [m for m, n in matches if m.distance < 0.4 * n.distance]
-        if len(good) < 10:
+        good = [m for m, n in matches if m.distance < 0.6 * n.distance]
+        if len(good) < 15:
             continue
 
         # 2) Stima omografia con RANSAC
         src_pts = np.float32([kp_model[m.queryIdx].pt for m in good]).reshape(-1,1,2)
         dst_pts = np.float32([kp_scene[m.trainIdx].pt for m in good]).reshape(-1,1,2)
-        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 1.0)
         if M is None:
             continue
         inliers = int(mask.sum())
-        if inliers < 4:
+        if inliers < 12:
             continue
 
         # 3) Trasforma corner del modello
@@ -82,7 +82,7 @@ for scene_file in scene_files:
         box_pts = cv2.boxPoints(rot_rect).astype(int)
 
         # 5) Filtro area minima (almeno 1% area scena)
-        if w_box * h_box < 0.01 * (w_scene * h_scene):
+        if w_box * h_box < 0.05 * (w_scene * h_scene):
             continue
 
         # Salva detection
