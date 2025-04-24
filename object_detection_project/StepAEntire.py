@@ -58,7 +58,7 @@ for scene_file in scene_files:
         # 1) Matching SIFT + Lowe ratio test
         matches = bf.knnMatch(des_model, des_scene, k=2)
         good = [m for m, n in matches if m.distance < 0.6 * n.distance]
-        if len(good) < 15:
+        if len(good) < 20:
             continue
 
         # 2) Stima omografia con RANSAC
