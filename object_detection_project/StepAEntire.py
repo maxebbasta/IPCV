@@ -5,7 +5,8 @@ import os
 
 # -------------------------------------------
 # Fase A migliorata: Rilevamento con SIFT,
-# Omografia, debug e bounding box ruotato
+# Omografia, debug, filtro colore per due modelli,
+# e bounding box ruotato
 # -------------------------------------------
 
 # Configurazione
@@ -14,11 +15,15 @@ SCENES_DIR   = "./scenes/"    # immagini scena: e1.png, e2.png, ...
 MODEL_IDS    = [0, 1, 11, 19, 24, 25, 26]
 SCENE_FILES  = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
 
+# Modelli da discriminare con filtro colore
+CONFUSE_MODELS  = {1, 11}
+HUE_DIFF_THRESH = 10  # gradi di Hue ammessi
+
 # Parametri di matching e filtro
-MIN_MATCHES     = 35     # numero minimo di match valida/o e di inliers
+MIN_MATCHES     = 35     # numero minimo di match e inliers
 RATIO_TEST      = 0.7    # soglia Lowe
-MIN_AREA_RATIO  = 0.1   # area minima relativa alla scena
-RANSAC_THRESH   = 3    # soglia RANSAC in pixel
+MIN_AREA_RATIO  = 0.01   # area minima relativa alla scena
+RANSAC_THRESH   = 3.0    # soglia RANSAC in pixel
 
 # Funzione di pre-processing scena (CLAHE)
 def preprocess_scene(img_scene):
@@ -28,6 +33,11 @@ def preprocess_scene(img_scene):
     cl = clahe.apply(l)
     lab = cv2.merge((cl, a, b))
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+# Calcola mean Hue di un'immagine BGR
+def calc_mean_hue(img_bgr):
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    return float(np.mean(hsv[:, :, 0]))
 
 # Inizializza SIFT e BFMatcher
 sift = cv2.SIFT_create()
@@ -40,13 +50,22 @@ for mid in MODEL_IDS:
     img_model = cv2.imread(path)
     if img_model is None:
         raise FileNotFoundError(f"Model image not found: {path}")
+
+    # keypoints e descrittori
     kp_model, des_model = sift.detectAndCompute(img_model, None)
     h_model, w_model = img_model.shape[:2]
+
+    # mean hue per i modelli da filtrare
+    mean_hue = None
+    if mid in CONFUSE_MODELS:
+        mean_hue = calc_mean_hue(img_model)
+
     models[mid] = {
         'img': img_model,
         'kp': kp_model,
         'des': des_model,
-        'size': (w_model, h_model)
+        'size': (w_model, h_model),
+        'mean_hue': mean_hue
     }
 
 # Processa ciascuna immagine di scena
@@ -56,14 +75,14 @@ for scene_file in SCENE_FILES:
     if img_scene is None:
         raise FileNotFoundError(f"Scene image not found: {scene_path}")
 
-    # Pre-process della scena per miglior contrasto
+    # Pre-process della scena
     img_proc = preprocess_scene(img_scene)
     h_scene, w_scene = img_proc.shape[:2]
 
-    # Estrai keypoint e descrittori dalla scena
+    # Estrai keypoints e descrittori
     kp_scene, des_scene = sift.detectAndCompute(img_proc, None)
     print(f"\n=== Analisi scena {scene_file} ===")
-    print(f"Kp scena: {len(kp_scene)}  Descriptors scena: {None if des_scene is None else des_scene.shape}")
+    print(f"Kp scena: {len(kp_scene)}  Descriptors: {None if des_scene is None else des_scene.shape}")
 
     detections = {}
     # Matching e omografia per ogni modello
@@ -104,7 +123,7 @@ for scene_file in SCENE_FILES:
         dst_c = cv2.perspectiveTransform(corners, M)
         pts = dst_c.reshape(-1,2).astype(np.float32)
 
-        # 4) Calcola bbox ruotato via minAreaRect
+        # 4) Calcola bbox ruotato
         rot_rect = cv2.minAreaRect(pts)
         (cx, cy), (w_box, h_box), angle = rot_rect
         box_pts = cv2.boxPoints(rot_rect).astype(int)
@@ -113,6 +132,20 @@ for scene_file in SCENE_FILES:
         if w_box * h_box < MIN_AREA_RATIO * (w_scene * h_scene):
             print(f"  => Skip: area troppo piccola (<{MIN_AREA_RATIO*100:.2f}% scena)")
             continue
+
+        # 6) Filtro colore condizionato
+        if mid in CONFUSE_MODELS:
+            # estrai frontalmente ROI
+            src_rect = np.float32([[0,0],[w_model,0],[w_model,h_model],[0,h_model]])
+            dst_rect = np.float32(box_pts)
+            M_inv = cv2.getPerspectiveTransform(dst_rect, src_rect)
+            roi = cv2.warpPerspective(img_scene, M_inv, (w_model, h_model))
+            mean_h_roi = calc_mean_hue(roi)
+            diff_h = abs(mean_h_roi - data['mean_hue'])
+            print(f"  Hue ROI={mean_h_roi:.1f}, Modello={data['mean_hue']:.1f}, Δ={diff_h:.1f}")
+            if diff_h > HUE_DIFF_THRESH:
+                print(f"  => Skip: differenza colore troppo alta (>±{HUE_DIFF_THRESH}°)")
+                continue
 
         # Salva detection
         detections.setdefault(mid, []).append({
@@ -132,8 +165,8 @@ for scene_file in SCENE_FILES:
         print(f"  Modello {pid} - {len(dets)} istanza(e) individuata(e):")
         for idx, det in enumerate(dets, 1):
             cx, cy = det['center']
-            w_box, h_box = det['width'], det['height']
-            print(f"    Istanza {idx} {{posizione: ({cx},{cy}), w={w_box}px, h={h_box}px, angolo={det['angle']:.1f}°}}")
+            w_b, h_b = det['width'], det['height']
+            print(f"    Istanza {idx} {{posizione: ({cx},{cy}), w={w_b}px, h={h_b}px, angolo={det['angle']:.1f}°}}")
 
     # Disegna e mostra risultati
     vis = img_scene.copy()
