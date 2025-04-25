@@ -5,7 +5,7 @@ import os
 
 # -------------------------------------------
 # Fase A migliorata: Rilevamento con SIFT,
-# Omografia, debug, filtro colore per due modelli,
+# Omografia, debug, filtro colore per modelli confusi,
 # e bounding box ruotato
 # -------------------------------------------
 
@@ -16,8 +16,9 @@ MODEL_IDS    = [0, 1, 11, 19, 24, 25, 26]
 SCENE_FILES  = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
 
 # Modelli da discriminare con filtro colore
-CONFUSE_MODELS  = {1, 11}
-HUE_DIFF_THRESH = 10  # gradi di Hue ammessi
+# Include coppie che risultano spesso confuse
+CONFUSE_MODELS  = {1, 11, 0, 26}
+HUE_DIFF_THRESH = 17  # differenza Hue ammessa (in gradi)
 
 # Parametri di matching e filtro
 MIN_MATCHES     = 35     # numero minimo di match e inliers
@@ -135,7 +136,6 @@ for scene_file in SCENE_FILES:
 
         # 6) Filtro colore condizionato
         if mid in CONFUSE_MODELS:
-            # estrai frontalmente ROI
             src_rect = np.float32([[0,0],[w_model,0],[w_model,h_model],[0,h_model]])
             dst_rect = np.float32(box_pts)
             M_inv = cv2.getPerspectiveTransform(dst_rect, src_rect)
@@ -172,7 +172,7 @@ for scene_file in SCENE_FILES:
     vis = img_scene.copy()
     for dets in detections.values():
         for det in dets:
-            cv2.drawContours(vis, [det['box_pts']], 0, (0,255,0), 2)
+            cv2.drawContours(vis, [det['box_pts']], 0, (0,255,0), 5)
             cv2.circle(vis, det['center'], 4, (0,0,255), -1)
     cv2.imshow(f"Detections - {scene_file}", vis)
     cv2.waitKey(0)
