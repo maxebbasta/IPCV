@@ -6,25 +6,34 @@ import os
 # -------------------------------------------
 # Fase A migliorata: Rilevamento con SIFT,
 # Omografia, debug, filtro colore per modelli confusi,
-# e bounding box ruotato
+# e bounding box ruotato con ID
 # -------------------------------------------
 
 # Configurazione
-MODELS_DIR   = "./models/"    # immagini modello: 0.jpg, 1.jpg, ...
-SCENES_DIR   = "./scenes/"    # immagini scena: e1.png, e2.png, ...
-MODEL_IDS    = [0, 1, 11, 19, 24, 25, 26]
-SCENE_FILES  = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
+MODELS_DIR       = "./models/"    # immagini modello: 0.jpg, 1.jpg, ...
+SCENES_DIR       = "./scenes/"    # immagini scena: e1.png, e2.png, ...
+MODEL_IDS        = [0, 1, 11, 19, 24, 25, 26]
+SCENE_FILES      = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
 
 # Modelli da discriminare con filtro colore
-# Include coppie che risultano spesso confuse
-CONFUSE_MODELS  = {1, 11, 0, 26}
-HUE_DIFF_THRESH = 18  # differenza Hue ammessa (in gradi)
+CONFUSE_MODELS   = {1, 11, 0, 26}
+HUE_DIFF_THRESH  = 18  # differenza Hue ammessa (in gradi)
 
 # Parametri di matching e filtro
-MIN_MATCHES     = 30     # numero minimo di match e inliers
-RATIO_TEST      = 0.7    # soglia Lowe
-MIN_AREA_RATIO  = 0.01   # area minima relativa alla scena
-RANSAC_THRESH   = 3.0    # soglia RANSAC in pixel
+MIN_MATCHES      = 30     # numero minimo di match e inliers
+RATIO_TEST       = 0.7    # soglia Lowe
+MIN_AREA_RATIO   = 0.01   # area minima relativa alla scena
+RANSAC_THRESH    = 3.0    # soglia RANSAC in pixel
+
+# Stile disegno
+BOX_COLOR    = (0, 255, 0)   # verde per box
+CENTER_COLOR = (0, 0, 255)   # rosso per centroide
+TEXT_COLOR   = (0, 255, 0)  # bianco per testo
+FONT         = cv2.FONT_HERSHEY_SIMPLEX
+FONT_SCALE   = 0.7
+TEXT_THICK   = 2
+BOX_THICK    = 10
+CIRCLE_RAD   = 4
 
 # Funzione di pre-processing scena (CLAHE)
 def preprocess_scene(img_scene):
@@ -42,7 +51,7 @@ def calc_mean_hue(img_bgr):
 
 # Inizializza SIFT e BFMatcher
 sift = cv2.SIFT_create()
-bf = cv2.BFMatcher(cv2.NORM_L2)
+bf   = cv2.BFMatcher(cv2.NORM_L2)
 
 # Caricamento e pre-elaborazione dei modelli
 models = {}
@@ -121,8 +130,8 @@ for scene_file in SCENE_FILES:
 
         # 3) Trasforma corner del modello
         corners = np.float32([[0,0],[w_model,0],[w_model,h_model],[0,h_model]]).reshape(-1,1,2)
-        dst_c = cv2.perspectiveTransform(corners, M)
-        pts = dst_c.reshape(-1,2).astype(np.float32)
+        dst_c  = cv2.perspectiveTransform(corners, M)
+        pts    = dst_c.reshape(-1,2).astype(np.float32)
 
         # 4) Calcola bbox ruotato
         rot_rect = cv2.minAreaRect(pts)
@@ -138,10 +147,10 @@ for scene_file in SCENE_FILES:
         if mid in CONFUSE_MODELS:
             src_rect = np.float32([[0,0],[w_model,0],[w_model,h_model],[0,h_model]])
             dst_rect = np.float32(box_pts)
-            M_inv = cv2.getPerspectiveTransform(dst_rect, src_rect)
-            roi = cv2.warpPerspective(img_scene, M_inv, (w_model, h_model))
+            M_inv    = cv2.getPerspectiveTransform(dst_rect, src_rect)
+            roi       = cv2.warpPerspective(img_scene, M_inv, (w_model, h_model))
             mean_h_roi = calc_mean_hue(roi)
-            diff_h = abs(mean_h_roi - data['mean_hue'])
+            diff_h     = abs(mean_h_roi - data['mean_hue'])
             print(f"  Hue ROI={mean_h_roi:.1f}, Modello={data['mean_hue']:.1f}, Δ={diff_h:.1f}")
             if diff_h > HUE_DIFF_THRESH:
                 print(f"  => Skip: differenza colore troppo alta (>±{HUE_DIFF_THRESH}°)")
@@ -150,9 +159,9 @@ for scene_file in SCENE_FILES:
         # Salva detection
         detections.setdefault(mid, []).append({
             'center': (int(round(cx)), int(round(cy))),
-            'width': int(round(w_box)),
+            'width':  int(round(w_box)),
             'height': int(round(h_box)),
-            'angle': angle,
+            'angle':  angle,
             'box_pts': box_pts
         })
         print(f"  *** Rilevata istanza modello {mid} ({inliers} inliers) ***")
@@ -168,12 +177,21 @@ for scene_file in SCENE_FILES:
             w_b, h_b = det['width'], det['height']
             print(f"    Istanza {idx} {{posizione: ({cx},{cy}), w={w_b}px, h={h_b}px, angolo={det['angle']:.1f}°}}")
 
-    # Disegna e mostra risultati
+    # Disegna e mostra risultati con ID
     vis = img_scene.copy()
-    for dets in detections.values():
+    for pid, dets in detections.items():
         for det in dets:
-            cv2.drawContours(vis, [det['box_pts']], 0, (0,255,0), 5)
-            cv2.circle(vis, det['center'], 4, (0,0,255), -1)
+            # bounding box ruotato
+            cv2.drawContours(vis, [det['box_pts']], 0, BOX_COLOR, BOX_THICK)
+            # centroide
+            cv2.circle(vis, det['center'], CIRCLE_RAD, CENTER_COLOR, -1)
+            # testo ID centrato
+            text = f"ID: {pid}"
+            (tw, th), _ = cv2.getTextSize(text, FONT, FONT_SCALE, TEXT_THICK)
+            tx = det['center'][0] - tw // 2
+            ty = det['center'][1] + th // 2
+            cv2.putText(vis, text, (tx, ty), FONT, FONT_SCALE, TEXT_COLOR, TEXT_THICK)
+
     cv2.imshow(f"Detections - {scene_file}", vis)
     cv2.waitKey(0)
     cv2.destroyAllWindows()

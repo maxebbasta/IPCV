@@ -172,7 +172,7 @@ for scene_file in SCENE_FILES:
     vis = img_scene.copy()
     for dets in detections.values():
         for det in dets:
-            cv2.drawContours(vis, [det['box_pts']], 0, (0,255,0), 5)
+            cv2.drawContours(vis, [det['box_pts']], 0, (0,255,0), 10)
             cv2.circle(vis, det['center'], 4, (0,0,255), -1)
     cv2.imshow(f"Detections - {scene_file}", vis)
     cv2.waitKey(0)
