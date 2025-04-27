@@ -17,7 +17,7 @@ SCENE_FILES      = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
 
 # Modelli da discriminare con filtro colore
 CONFUSE_MODELS   = {1, 11, 0, 26}
-HUE_DIFF_THRESH  = 18  # differenza Hue ammessa (in gradi)
+HUE_DIFF_THRESH  = 17  # differenza Hue ammessa (in gradi)
 
 # Parametri di matching e filtro
 MIN_MATCHES      = 30     # numero minimo di match e inliers
