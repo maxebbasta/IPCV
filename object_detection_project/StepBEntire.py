@@ -23,7 +23,7 @@ RATIO_TEST          = 0.7    # soglia Lowe per filtro ratio test
 RANSAC_THRESH       = 3.0    # soglia RANSAC in pixel per omografia
 MIN_AREA_RATIO      = 0.01   # area minima rilevata rispetto all'area scena (filtro)
 CLUSTER_EPS         = 30.0   # raggio (in pixel) per clustering dei voti GHT
-MIN_CLUSTER_INLIERS = 10     # numero minimo di inliers richiesti per accettare una istanza
+MIN_CLUSTER_INLIERS = 8     # numero minimo di inliers richiesti per accettare una istanza
 
 # Stile disegno risultati
 BOX_COLOR    = (0, 255, 0)   # colore verde per bounding box
