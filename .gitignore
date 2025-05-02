@@ -164,3 +164,4 @@ cython_debug/
 
 # YOLOv5
 yolov5/
+dataset/
