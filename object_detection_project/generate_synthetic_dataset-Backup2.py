@@ -18,10 +18,10 @@ BACKGROUNDS_DIR     = "dataset/backgrounds"   # sfondi (1.jpg–25.jpg)
 MODELS_DIR          = "models"                # ritagli modello (0.jpg,…,23.jpg)
 OUTPUT_IMAGES_DIR   = "dataset/images/train"  # dove salvare immagini sintetiche
 OUTPUT_LABELS_DIR   = "dataset/labels/train"  # dove salvare etichette YOLO
-NUM_IMAGES          = 15000                    # numero minimo di immagini da generare
-MIN_OBJS, MAX_OBJS  = 15, 25                   # min/max oggetti per immagine
-MIN_OCC_PER_CLASS   = 7500                     # occorrenze minime per ogni classe
-MAX_IOU             = 0.1                     # soglia IoU massima per evitare sovrapposizioni
+NUM_IMAGES          = 30000                    # numero minimo di immagini da generare
+MIN_OBJS, MAX_OBJS  = 40, 50                   # min/max oggetti per immagine
+MIN_OCC_PER_CLASS   = 35000                     # occorrenze minime per ogni classe
+MAX_IOU             = 0.15                     # soglia IoU massima per evitare sovrapposizioni
 MIN_FACTOR, MAX_FACTOR = 4, 6.0             # model height = bg_height / factor
 # ------------------------
 
@@ -96,7 +96,7 @@ def rotate_full(fg, angle):
                           borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
 
 
-def random_perspective(img, max_warp=0.05):
+def random_perspective(img, max_warp=0.2):
     h,w = img.shape[:2]
     def pts(delta):
         return [
@@ -150,18 +150,17 @@ def main():
             fg = np.dstack((bgr,alpha_ch))
 
             # rotazione
-            fg = rotate_full(fg, random.uniform(-15,15))
+            fg = rotate_full(fg, random.uniform(-20,20))
 
             # occlusione bordo (edge-cut)
-            if random.random()<0.3:
+            if random.random()<0.5:
                 h_fg,w_fg = fg.shape[:2]
                 side = random.choice([0,1,2,3])
-                depth = int((h_fg if side in [0,2] else w_fg)*random.uniform(0.1,0.3))
+                depth = int((h_fg if side in [0,2] else w_fg)*random.uniform(0.05,0.70))
                 if side==0: fg[:depth,:,3]=0
                 elif side==2: fg[-depth:,:,3]=0
                 elif side==1: fg[:,-depth:,3]=0
                 else: fg[:,:depth,3]=0
-
             # blur
             if random.random()<0.3:
                 k = random.choice([3,5])
@@ -172,14 +171,6 @@ def main():
                 noise = np.random.normal(0,10,fg[...,:3].shape).astype(np.int16)
                 bgr = np.clip(fg[...,:3].astype(np.int16)+noise,0,255).astype(np.uint8)
                 fg = np.dstack((bgr,fg[...,3:]))
-            # random erasing
-            if random.random()<0.2:
-                h_fg,w_fg = fg.shape[:2]
-                ew = random.randint(int(w_fg*0.1),int(w_fg*0.3))
-                eh = random.randint(int(h_fg*0.1),int(h_fg*0.3))
-                ex = random.randint(0,w_fg-ew)
-                ey = random.randint(0,h_fg-eh)
-                fg[ey:ey+eh,ex:ex+ew,:3] = 128
 
             # prospettiva
             if random.random()<0.3:
