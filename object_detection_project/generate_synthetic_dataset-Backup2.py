@@ -18,11 +18,11 @@ BACKGROUNDS_DIR     = "dataset/backgrounds"   # sfondi (1.jpg–25.jpg)
 MODELS_DIR          = "models"                # ritagli modello (0.jpg,…,23.jpg)
 OUTPUT_IMAGES_DIR   = "dataset/images/train"  # dove salvare immagini sintetiche
 OUTPUT_LABELS_DIR   = "dataset/labels/train"  # dove salvare etichette YOLO
-NUM_IMAGES          = 5000                    # numero minimo di immagini da generare
-MIN_OBJS, MAX_OBJS  = 10, 15                   # min/max oggetti per immagine
-MIN_OCC_PER_CLASS   = 500                     # occorrenze minime per ogni classe
+NUM_IMAGES          = 15000                    # numero minimo di immagini da generare
+MIN_OBJS, MAX_OBJS  = 15, 25                   # min/max oggetti per immagine
+MIN_OCC_PER_CLASS   = 7500                     # occorrenze minime per ogni classe
 MAX_IOU             = 0.1                     # soglia IoU massima per evitare sovrapposizioni
-MIN_FACTOR, MAX_FACTOR = 4.0, 6.0             # model height = bg_height / factor
+MIN_FACTOR, MAX_FACTOR = 4, 6.0             # model height = bg_height / factor
 # ------------------------
 
 def ensure_dir(path):
