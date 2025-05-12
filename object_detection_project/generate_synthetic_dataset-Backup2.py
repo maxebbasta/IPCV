@@ -19,10 +19,10 @@ MODELS_DIR          = "models"                # ritagli modello (0.jpg,…,23.jp
 OUTPUT_IMAGES_DIR   = "dataset/images/train"  # dove salvare immagini sintetiche
 OUTPUT_LABELS_DIR   = "dataset/labels/train"  # dove salvare etichette YOLO
 NUM_IMAGES          = 30000                    # numero minimo di immagini da generare
-MIN_OBJS, MAX_OBJS  = 40, 50                   # min/max oggetti per immagine
-MIN_OCC_PER_CLASS   = 35000                     # occorrenze minime per ogni classe
+MIN_OBJS, MAX_OBJS  = 40, 60                   # min/max oggetti per immagine
+MIN_OCC_PER_CLASS   = 35000                    # occorrenze minime per ogni classe
 MAX_IOU             = 0.15                     # soglia IoU massima per evitare sovrapposizioni
-MIN_FACTOR, MAX_FACTOR = 4, 6.0             # model height = bg_height / factor
+MIN_FACTOR, MAX_FACTOR = 4.5, 6.0              # model height = bg_height / factor
 # ------------------------
 
 def ensure_dir(path):
@@ -180,7 +180,7 @@ def main():
             for _ in range(10):
                 x = random.randint(0,max(0,w_bg-w_fg))
                 y = random.randint(0,max(0,h_bg-h_fg))
-                box = (x,y,x+w_fg,y+h_fg)
+                box = (x,y,x+w_fg,y+y+h_fg)
                 if all(compute_iou(box,bb)<MAX_IOU for bb in bboxes):
                     x1,y1,x2,y2 = overlay_image(bg,fg,x,y)
                     bboxes.append((x1,y1,x2,y2))
@@ -191,8 +191,15 @@ def main():
                     break
 
         name = f"synthetic_{idx:05d}"
-        cv2.imwrite(os.path.join(OUTPUT_IMAGES_DIR,f"{name}.jpg"),bg)
-        with open(os.path.join(OUTPUT_LABELS_DIR,f"{name}.txt"),'w') as f:
+
+        # forza altezza = 640px su tutte le immagini
+        h_bg, w_bg = bg.shape[:2]
+        new_h = 640
+        new_w = int(w_bg * new_h / h_bg)
+        bg = cv2.resize(bg, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        cv2.imwrite(os.path.join(OUTPUT_IMAGES_DIR, f"{name}.jpg"), bg)
+        with open(os.path.join(OUTPUT_LABELS_DIR, f"{name}.txt"), 'w') as f:
             f.write("\n".join(labels))
         idx+=1
         if idx%50==0:

@@ -40,7 +40,7 @@ noval: false
 noautoanchor: false
 noplots: false
 evolve: null
-evolve_population: data\hyps
+evolve_population: ..\..\..\..\..\Documents\GitHub\IPCV\object_detection_project\yolov5\data\hyps
 resume_evolve: null
 bucket: ''
 cache: disk
