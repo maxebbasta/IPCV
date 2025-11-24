@@ -15,7 +15,7 @@ product_ids = [0, 1, 11, 19, 24, 25, 26]
 scene_names = ["e1.png", "e2.png", "e3.png", "e4.png", "e5.png"]
 
 # soglia minima di match buoni per stimare la omografia (come nel lab)
-MIN_MATCH_COUNT = 15
+MIN_MATCH_COUNT = 25
 
 # lato massimo consentito per immagini (scene e modelli)
 MAX_SIDE =1000
