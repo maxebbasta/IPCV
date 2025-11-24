@@ -296,14 +296,15 @@ for scene_name in scene_names:
         cv2.rectangle(img_scene_result,
                       (x_min, y_min),
                       (x_max, y_max),
-                      (0,255,0), 2)
+                      (0,255,0), 5)
 
         cv2.putText(img_scene_result,
-                    f"ID {pid}",
-                    (x_min, max(y_min-5,0)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0,255,0), 1)
+            f"ID {pid}",
+            (cx - 15, cy),     # TESTO CENTRATO
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0,255,0), 5)
+
 
         print(f"[FINAL] Product {pid} "
               f"center=({cx},{cy}) w={w_box} h={h_box} sim={det['sim']:.3f}")
