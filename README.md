@@ -1,5 +1,9 @@
 # 🛒 Product Recognition on Store Shelves
 
+[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.x-green.svg)](https://opencv.org/)
+[![YOLOv5](https://img.shields.io/badge/YOLOv5-Ultralytics-orange.svg)](https://github.com/ultralytics/yolov5)
+
 > **Authors:** Massimo Modesti, Federico Tampieri
 
 ## 📖 Overview
